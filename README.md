@@ -65,7 +65,7 @@ docker compose -f infra/docker-compose.yaml up --build
 5) Frontend: displays answer, citations, eval, and per-step timings.
 
 ## Screenshots
-Add your captured images to `docs/` and they will render here:
+
 
 - URL ingest & upload:
   ![URL ingest](docs/url-ingest.png)
