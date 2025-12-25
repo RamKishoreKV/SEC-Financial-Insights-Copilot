@@ -1,0 +1,80 @@
+version: "3.9"
+
+services:
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: packages/api-gateway/Dockerfile
+    command: uvicorn app:app --host 0.0.0.0 --port 8000
+    environment:
+      ORCHESTRATOR_URL: http://orchestrator:8001
+      RETRIEVAL_URL: http://retrieval:8002
+      EVALUATOR_URL: http://evaluator:8003
+      MOCK_MODE: "false"
+      DEFAULT_PROVIDER: ollama
+      OLLAMA_MODEL: llama3
+    ports:
+      - "8000:8000"
+    depends_on:
+      - orchestrator
+
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: packages/orchestrator/Dockerfile
+    command: uvicorn app:app --host 0.0.0.0 --port 8001
+    depends_on:
+      - retrieval
+      - evaluator
+    environment:
+      RETRIEVAL_URL: http://retrieval:8002
+      EVALUATOR_URL: http://evaluator:8003
+      MOCK_MODE: "false"
+      DEFAULT_PROVIDER: ollama
+      OLLAMA_MODEL: llama3
+
+  retrieval:
+    build:
+      context: ..
+      dockerfile: packages/retrieval/Dockerfile
+    command: uvicorn app:app --host 0.0.0.0 --port 8002
+    volumes:
+      - ../data:/app/data
+    environment:
+      CHROMA_PERSIST_DIR: /app/data/chroma
+      CHROMA_HOST: chroma
+      CHROMA_PORT: 8000
+      SEC_USER_AGENT: "kv.ramkishore0@gmail.com sec-copilot/0.1"
+      MOCK_MODE: "false"
+      DEFAULT_PROVIDER: ollama
+      OLLAMA_MODEL: llama3
+    depends_on:
+      - chroma
+
+  evaluator:
+    build:
+      context: ..
+      dockerfile: packages/evaluator/Dockerfile
+    command: uvicorn app:app --host 0.0.0.0 --port 8003
+    env_file:
+      - ../.env
+
+  chroma:
+    image: chromadb/chroma:0.5.5
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    volumes:
+      - ../data/chroma:/chroma/chroma
+    ports:
+      - "8004:8000"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+

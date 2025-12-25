@@ -1,0 +1,2 @@
+Item 1A. Risk Factors. Demand for cloud services and enterprise software may slow due to macroeconomic conditions. Intense competition in cloud, productivity software, and AI services could pressure pricing and margins. Cybersecurity threats, including nation-state attacks, present ongoing risks to service availability and customer trust. Changes in AI regulation, data privacy, export controls, and antitrust enforcement may affect product roadmaps and market access. Supply chain constraints for data center hardware and energy availability could impact capacity expansions.
+

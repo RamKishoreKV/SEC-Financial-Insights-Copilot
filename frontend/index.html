@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SEC Insights Copilot</title>
+  <style>
+    :root { color-scheme: light; }
+    body { font-family: Inter, Arial, sans-serif; margin: 0; padding: 24px; background: #f6f7fb; color: #1f2933; }
+    .card { max-width: 900px; margin: 0 auto; background: white; border-radius: 12px; padding: 20px; box-shadow: 0 6px 24px rgba(0,0,0,0.06); }
+    h1 { margin-top: 0; }
+    label { display: block; margin-top: 12px; font-weight: 600; }
+    input, textarea, select, button { width: 100%; margin-top: 8px; padding: 10px; border-radius: 8px; border: 1px solid #d6d9e0; font-size: 14px; }
+    button { background: #2563eb; color: white; border: none; cursor: pointer; font-weight: 700; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .output { margin-top: 18px; padding: 12px; background: #f0f4ff; border-radius: 8px; border: 1px solid #d7e3ff; }
+    .citations { margin-top: 10px; padding-left: 18px; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 700; background: #e5edff; color: #1d4ed8; }
+    .error { color: #b91c1c; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>SEC Financial Insights Copilot</h1>
+    <p>Ask questions about 10-K/10-Q filings. The backend runs retrieval ➜ generation ➜ evaluation with LangGraph.</p>
+    <div class="row">
+      <div>
+        <label for="question">Question</label>
+        <textarea id="question" rows="3" placeholder="What was ACME's 2023 revenue?"></textarea>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="company">Company (optional)</label>
+        <input id="company" placeholder="Company name" />
+      </div>
+      <div>
+        <label for="year">Year (optional)</label>
+        <input id="year" type="number" placeholder="e.g., 2023" />
+      </div>
+    </div>
+    <button id="submit">Ask</button>
+    <h3>Upload & Index</h3>
+    <div class="row">
+      <div>
+        <label for="file">Document (pdf or txt)</label>
+        <input id="file" type="file" />
+      </div>
+      <div>
+        <label for="companyUpload">Company (optional)</label>
+        <input id="companyUpload" placeholder="Company for this upload" />
+      </div>
+      <div>
+        <label for="yearUpload">Year (optional)</label>
+        <input id="yearUpload" type="number" placeholder="e.g., 2024" />
+      </div>
+      <div>
+        <label for="urlUpload">Or URL (EDGAR link)</label>
+        <input id="urlUpload" placeholder="https://..." />
+      </div>
+      <div>
+        <label for="urlCount">How many URLs?</label>
+        <input id="urlCount" type="number" min="1" value="1" />
+      </div>
+    </div>
+    <div id="urlContainer" class="row"></div>
+      </div>
+    </div>
+    <button id="ingest" type="button">Upload & Build Index</button>
+    <div id="status" class="badge" style="display:none;">Running...</div>
+    <div id="error" class="error"></div>
+    <div id="answer" class="output" style="display:none;"></div>
+    <div id="timings" class="output" style="display:none;"></div>
+    <div id="eval" class="output" style="display:none;"></div>
+    <div id="citations" class="output" style="display:none;"></div>
+  </div>
+
+  <script>
+    const submitBtn = document.getElementById('submit');
+    const statusEl = document.getElementById('status');
+    const errorEl = document.getElementById('error');
+    const answerEl = document.getElementById('answer');
+    const timingsEl = document.getElementById('timings');
+    const evalEl = document.getElementById('eval');
+    const citationsEl = document.getElementById('citations');
+    const ingestBtn = document.getElementById('ingest');
+    const urlContainer = document.getElementById('urlContainer');
+    const urlCountInput = document.getElementById('urlCount');
+
+    async function ask() {
+      const question = document.getElementById('question').value.trim();
+      const company = document.getElementById('company').value.trim();
+      const yearRaw = document.getElementById('year').value.trim();
+      const year = yearRaw ? parseInt(yearRaw, 10) : undefined;
+      errorEl.textContent = '';
+      answerEl.style.display = 'none';
+      evalEl.style.display = 'none';
+      citationsEl.style.display = 'none';
+
+      if (!question) {
+        errorEl.textContent = 'Please enter a question.';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      statusEl.style.display = 'inline-block';
+      statusEl.textContent = 'Running...';
+
+      try {
+        const resp = await fetch('http://localhost:8000/qa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question, company: company || null, year: year || null })
+        });
+        if (!resp.ok) {
+          throw new Error(`Request failed: ${resp.status}`);
+        }
+        const data = await resp.json();
+        answerEl.style.display = 'block';
+        answerEl.innerHTML = `<strong>Answer (provider: ${data.provider}):</strong><br/>${data.answer}`;
+
+        if (data.timings) {
+          timingsEl.style.display = 'block';
+          timingsEl.innerHTML = `<details><summary>Timings (ms)</summary>
+            Retrieve: ${data.timings.retrieve_ms.toFixed(1)}<br/>
+            Generate: ${data.timings.generate_ms.toFixed(1)}<br/>
+            Evaluate: ${data.timings.eval_ms.toFixed(1)}<br/>
+            Total: ${data.timings.total_ms.toFixed(1)}
+          </details>`;
+        } else {
+          timingsEl.style.display = 'none';
+        }
+
+        evalEl.style.display = 'block';
+        evalEl.innerHTML = `<strong>Evaluation:</strong> ${data.eval.passed ? 'Passed' : 'Issues'}<br/>Reasons: ${data.eval.reasons.join('; ')}<br/>Risk: ${data.eval.risk_level}`;
+
+        if (data.citations && data.citations.length) {
+          citationsEl.style.display = 'block';
+          const items = data.citations.map(c => `<li><strong>${c.source}</strong>: ${c.content}</li>`).join('');
+          citationsEl.innerHTML = `<strong>Citations:</strong><ul class="citations">${items}</ul>`;
+        }
+        statusEl.textContent = data.trace_id ? `Trace: ${data.trace_id}` : 'Done';
+      } catch (err) {
+        console.error(err);
+        errorEl.textContent = err.message || 'Request failed';
+        statusEl.textContent = 'Error';
+      } finally {
+        submitBtn.disabled = false;
+      }
+    }
+
+    async function ingest() {
+      const fileInput = document.getElementById('file');
+      if (!fileInput.files.length) {
+        errorEl.textContent = '';
+      }
+      const company = document.getElementById('companyUpload').value.trim() || 'upload';
+      const yearRaw = document.getElementById('yearUpload').value.trim();
+      const year = yearRaw ? parseInt(yearRaw, 10) : 0;
+      const urls = Array.from(document.querySelectorAll('.url-field')).map(i => i.value.trim()).filter(Boolean);
+
+      const form = new FormData();
+      if (fileInput.files.length) form.append('file', fileInput.files[0]);
+      if (urls.length) {
+        urls.forEach(u => form.append('url', u));
+      }
+      if (!fileInput.files.length && urls.length === 0) {
+        errorEl.textContent = 'Provide a file or a URL.';
+        return;
+      }
+      form.append('company', company);
+      form.append('year', year);
+
+      ingestBtn.disabled = true;
+      statusEl.style.display = 'inline-block';
+      statusEl.textContent = 'Uploading...';
+      errorEl.textContent = '';
+      try {
+        const resp = await fetch('http://localhost:8000/ingest', {
+          method: 'POST',
+          body: form,
+        });
+        if (!resp.ok) throw new Error(`Ingest failed: ${resp.status}`);
+        const data = await resp.json();
+        statusEl.textContent = `Indexed ${data.chunks} chunks`;
+      } catch (err) {
+        console.error(err);
+        errorEl.textContent = err.message || 'Upload failed';
+        statusEl.textContent = 'Error';
+      } finally {
+        ingestBtn.disabled = false;
+      }
+    }
+
+    submitBtn.addEventListener('click', ask);
+    ingestBtn.addEventListener('click', ingest);
+    function renderUrlInputs() {
+      const count = Math.max(1, parseInt(urlCountInput.value || '1', 10));
+      urlContainer.innerHTML = '';
+      for (let i = 0; i < count; i++) {
+        const div = document.createElement('div');
+        div.innerHTML = `
+          <label>URL ${i + 1}</label>
+          <input class="url-field" placeholder="https://..." />
+        `;
+        urlContainer.appendChild(div);
+      }
+    }
+    urlCountInput.addEventListener('change', renderUrlInputs);
+    renderUrlInputs();
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        ask();
+      }
+    });
+  </script>
+</body>
+</html>
+
