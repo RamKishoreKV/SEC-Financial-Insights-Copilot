@@ -2,6 +2,11 @@
 
 LangGraph-powered RAG + evaluation over SEC 10-K/10-Q filings. Local-first via Docker Compose; cloud-ready (Azure Container Apps, or any K8s). Supports multi-URL EDGAR ingest, citations, eval flags, and timings.
 
+## Overview
+- Goal: Quickly answer questions about public company filings with grounded citations and basic safety/eval checks.
+- What it solves: Removes manual digging through 10-K/10-Qs by ingesting one or many EDGAR URLs (or PDFs/text) and returning cited answers with timings and eval flags.
+- Components: FastAPI gateway, LangGraph orchestrator, retrieval with Chroma, evaluator, and a simple frontend.
+
 ## Features
 - `/qa`: retrieve → generate → evaluate (hallucination/consistency) with citations and timings.
 - `/ingest`: embed PDFs, text, or one/many EDGAR URLs on the fly.
@@ -51,6 +56,13 @@ docker compose -f infra/docker-compose.yaml up --build
 
 ## Timings & citations
 - QA responses include timings (retrieve/generate/eval/total) and citations; shown in the frontend dropdown.
+
+## How it works (flow)
+1) Ingest: fetch/parse EDGAR URLs or files → strip HTML/PDF → chunk → embed → store in Chroma.
+2) Retrieve: vector search (Chroma) with optional company/year filters, lexical fallback.
+3) Generate: LLM (Ollama by default) answers with provided context.
+4) Evaluate: heuristic checks (citations present, numeric sanity), returns eval flags + timings.
+5) Frontend: displays answer, citations, eval, and per-step timings.
 
 ## Screenshots
 Add your captured images to `docs/` and they will render here:
