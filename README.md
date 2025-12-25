@@ -41,6 +41,7 @@ docker compose -f infra/docker-compose.yaml up --build
 
 ## Ingest & Query
 - In frontend: set URL count, paste one/many EDGAR links (or upload PDF/txt), optional company/year, click “Upload & Build Index”. Then ask questions.
+- Supports single or multiple URLs; all ingested content is embedded together for downstream QA.
 - API ingest example (single URL):
   ```
   curl.exe -X POST http://localhost:8000/ingest \
@@ -61,36 +62,6 @@ docker compose -f infra/docker-compose.yaml up --build
     col=c.get_or_create_collection('sec-filings', metadata={'hnsw:space':'cosine'}); print(col.count())"
   ```
 - Slow LLM: use `OLLAMA_MODEL=llama3:8b` or switch provider to OpenAI.
-
-## Deploying to Azure (Container Apps, minimal)
-1) Create RG/ACR:
-   ```
-   az group create -n sec-copilot-rg -l eastus
-   az acr create -n seccopilotacr -g sec-copilot-rg --sku Basic
-   az acr login -n seccopilotacr
-   ```
-2) Push images (repeat per service):
-   ```
-   docker tag infra-api-gateway:latest seccopilotacr.azurecr.io/api-gateway:latest
-   docker push seccopilotacr.azurecr.io/api-gateway:latest
-   ```
-3) Create Container Apps env:
-   ```
-   az containerapp env create -n sec-copilot-env -g sec-copilot-rg -l eastus
-   ```
-4) Deploy (example for gateway; repeat for orchestrator/retrieval/evaluator/frontend):
-   ```
-   az containerapp create -n api-gateway -g sec-copilot-rg --environment sec-copilot-env \
-     --image seccopilotacr.azurecr.io/api-gateway:latest \
-     --ingress external --target-port 8000 \
-     --env-vars ORCHESTRATOR_URL=http://orchestrator:8001 \
-                RETRIEVAL_URL=http://retrieval:8002 \
-                EVALUATOR_URL=http://evaluator:8003 \
-                DEFAULT_PROVIDER=ollama OLLAMA_MODEL=llama3:8b MOCK_MODE=false \
-                SEC_USER_AGENT="you@example.com sec-copilot/0.1"
-   ```
-   Set orchestrator ingress=internal (ports 8001), retrieval ingress=internal (8002), evaluator ingress=internal (8003). Frontend ingress external (80) pointing to gateway URL in the UI config.
-5) Persistence: optional Azure File share mounted to retrieval at `/app/data/chroma`; otherwise re-ingest after restarts.
 
 ## Notes
 - Current setup is CPU-only. For faster generation, use a smaller model or configure GPU-backed hosting.
