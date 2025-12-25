@@ -52,6 +52,21 @@ docker compose -f infra/docker-compose.yaml up --build
 ## Timings & citations
 - QA responses include timings (retrieve/generate/eval/total) and citations; shown in the frontend dropdown.
 
+## Screenshots
+Add your captured images to `docs/` and they will render here:
+
+- URL ingest & upload:
+  ![URL ingest](docs/url-ingest.png)
+
+- App structure (home view):
+  ![App structure](docs/app-structure.png)
+
+- Question input:
+  ![Question](docs/question.png)
+
+- Answer with citations/timings:
+  ![Answer](docs/answer.png)
+
 ## Troubleshooting
 - Ingest 500: ensure SEC_USER_AGENT set; try a single URL via curl; check retrieval logs.
 - Empty index: check doc count in retrieval container:
